@@ -30,7 +30,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (add this file)
+# DB_HOST=127.0.0.1
+# DB_USER=root
+# DB_PASSWORD=(your password)
+# DB_NAME=railway_reservation
+# DB_PORT=3306 
 .env*
 
 # vercel
