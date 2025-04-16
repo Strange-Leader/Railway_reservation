@@ -1,0 +1,177 @@
+PASSENGER (
+    passenger_id INT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100),
+    phone VARCHAR(15) NOT NULL,
+    address VARCHAR(200),
+    date_of_birth DATE,
+    gender VARCHAR(10),
+    id_proof_type VARCHAR(20),
+    id_proof_number VARCHAR(30),
+    is_registered BOOLEAN DEFAULT FALSE
+)
+
+TRAIN (
+    train_number VARCHAR(10) PRIMARY KEY,
+    train_name VARCHAR(100) NOT NULL,
+    train_type VARCHAR(30),
+    total_coaches INT,
+    runs_on_sunday BOOLEAN DEFAULT TRUE,
+    runs_on_monday BOOLEAN DEFAULT TRUE,
+    runs_on_tuesday BOOLEAN DEFAULT TRUE,
+    runs_on_wednesday BOOLEAN DEFAULT TRUE,
+    runs_on_thursday BOOLEAN DEFAULT TRUE,
+    runs_on_friday BOOLEAN DEFAULT TRUE,
+    runs_on_saturday BOOLEAN DEFAULT TRUE
+)
+
+STATION (
+    station_code VARCHAR(10) PRIMARY KEY,
+    station_name VARCHAR(100) NOT NULL,
+    city VARCHAR(50) NOT NULL,
+    state VARCHAR(50) NOT NULL,
+    number_of_platforms INT,
+    zone VARCHAR(20),
+    latitude FLOAT,
+    longitude FLOAT
+)
+
+CLASS (
+    class_type VARCHAR(20) PRIMARY KEY,
+    description VARCHAR(100),
+    is_ac BOOLEAN,
+    berth_layout VARCHAR(50)
+)
+
+TICKET (
+    pnr_number VARCHAR(15) PRIMARY KEY,
+    booking_date DATE NOT NULL,
+    journey_date DATE NOT NULL,
+    source_station VARCHAR(10) NOT NULL,
+    destination_station VARCHAR(10) NOT NULL,
+    train_number VARCHAR(10) NOT NULL,
+    class_type VARCHAR(20) NOT NULL,
+    total_passengers INT NOT NULL,
+    total_fare FLOAT NOT NULL,
+    booking_status VARCHAR(20) NOT NULL,
+    booking_timestamp TIMESTAMP NOT NULL,
+    booking_channel VARCHAR(20) NOT NULL,
+    FOREIGN KEY (source_station) REFERENCES STATION(station_code),
+    FOREIGN KEY (destination_station) REFERENCES STATION(station_code),
+    FOREIGN KEY (train_number) REFERENCES TRAIN(train_number),
+    FOREIGN KEY (class_type) REFERENCES CLASS(class_type)
+)
+
+PAYMENT (
+    payment_id INT PRIMARY KEY,
+    pnr_number VARCHAR(15) NOT NULL,
+    amount FLOAT NOT NULL,
+    payment_mode VARCHAR(30) NOT NULL,
+    payment_timestamp TIMESTAMP NOT NULL,
+    transaction_id VARCHAR(50),
+    payment_status VARCHAR(20) NOT NULL,
+    gst_amount FLOAT,
+    service_charge FLOAT,
+    FOREIGN KEY (pnr_number) REFERENCES TICKET(pnr_number)
+)
+
+CONCESSION (
+    concession_type VARCHAR(30) PRIMARY KEY,
+    concession_percentage FLOAT NOT NULL,
+    description VARCHAR(200),
+    eligibility_criteria VARCHAR(200),
+    requires_proof BOOLEAN DEFAULT TRUE
+)
+
+PASSENGER_TICKET (
+    passenger_ticket_id INT PRIMARY KEY,
+    pnr_number VARCHAR(15) NOT NULL,
+    passenger_id INT NOT NULL,
+    seat_number VARCHAR(10),
+    coach_number VARCHAR(10),
+    reservation_status VARCHAR(20) NOT NULL,
+    is_primary_passenger BOOLEAN DEFAULT FALSE,
+    concession_amount FLOAT DEFAULT 0,
+    concession_type VARCHAR(30),
+    FOREIGN KEY (pnr_number) REFERENCES TICKET(pnr_number),
+    FOREIGN KEY (passenger_id) REFERENCES PASSENGER(passenger_id),
+    FOREIGN KEY (concession_type) REFERENCES CONCESSION(concession_type)
+)
+
+TRAIN_CLASS (
+    train_class_id INT PRIMARY KEY,
+    train_number VARCHAR(10) NOT NULL,
+    class_type VARCHAR(20) NOT NULL,
+    total_seats INT NOT NULL,
+    basic_fare FLOAT NOT NULL,
+    FOREIGN KEY (train_number) REFERENCES TRAIN(train_number),
+    FOREIGN KEY (class_type) REFERENCES CLASS(class_type),
+    UNIQUE (train_number, class_type)
+)
+
+ROUTE (
+    route_id INT PRIMARY KEY,
+    train_number VARCHAR(10) NOT NULL,
+    source_station VARCHAR(10) NOT NULL,
+    destination_station VARCHAR(10) NOT NULL,
+    total_distance INT NOT NULL,
+    total_stops INT,
+    FOREIGN KEY (train_number) REFERENCES TRAIN(train_number),
+    FOREIGN KEY (source_station) REFERENCES STATION(station_code),
+    FOREIGN KEY (destination_station) REFERENCES STATION(station_code)
+)
+
+ROUTE_STATION (
+    route_station_id INT PRIMARY KEY,
+    route_id INT NOT NULL,
+    station_code VARCHAR(10) NOT NULL,
+    stop_number INT NOT NULL,
+    arrival_time TIME,
+    departure_time TIME,
+    distance_from_source INT NOT NULL,
+    platform_number INT,
+    halt_time INT,
+    FOREIGN KEY (route_id) REFERENCES ROUTE(route_id),
+    FOREIGN KEY (station_code) REFERENCES STATION(station_code),
+    UNIQUE (route_id, stop_number),
+    UNIQUE (route_id, station_code)
+)
+
+TRAIN_STATUS (
+    status_id INT PRIMARY KEY,
+    train_number VARCHAR(10) NOT NULL,
+    journey_date DATE NOT NULL,
+    class_type VARCHAR(20) NOT NULL,
+    available_seats INT NOT NULL,
+    rac_seats INT DEFAULT 0,
+    waitlist_count INT DEFAULT 0,
+    last_updated TIMESTAMP NOT NULL,
+    remarks VARCHAR(200),
+    FOREIGN KEY (train_number) REFERENCES TRAIN(train_number),
+    FOREIGN KEY (class_type) REFERENCES CLASS(class_type),
+    UNIQUE (train_number, journey_date, class_type)
+)
+
+CANCELLATION (
+    cancellation_id INT PRIMARY KEY,
+    pnr_number VARCHAR(15) NOT NULL,
+    cancellation_timestamp TIMESTAMP NOT NULL,
+    cancellation_reason VARCHAR(200),
+    refund_amount FLOAT NOT NULL,
+    refund_status VARCHAR(20) NOT NULL,
+    refund_timestamp TIMESTAMP,
+    cancelled_by VARCHAR(30),
+    FOREIGN KEY (pnr_number) REFERENCES TICKET(pnr_number)
+)
+
+CANCELLATION (
+    cancellation_id INT PRIMARY KEY,
+    pnr_number VARCHAR(15) NOT NULL,
+    cancellation_timestamp TIMESTAMP NOT NULL,
+    cancellation_reason VARCHAR(200),
+    refund_amount FLOAT NOT NULL,
+    refund_status VARCHAR(20) NOT NULL,
+    refund_timestamp TIMESTAMP,
+    cancelled_by VARCHAR(30),
+    FOREIGN KEY (pnr_number) REFERENCES TICKET(pnr_number)
+)

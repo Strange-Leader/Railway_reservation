@@ -1,0 +1,392 @@
+-- Railway Reservation System Queries
+
+-- 1. PNR Status Tracking for a Given Ticket
+SELECT 
+    t.pnr_number,
+    t.booking_status,
+    t.train_number,
+    tr.train_name,
+    t.journey_date,
+    t.source_station,
+    t.destination_station,
+    t.class_type,
+    p.name,
+    pt.seat_number,
+    pt.coach_number,
+    pt.reservation_status
+FROM TICKET t
+JOIN TRAIN tr ON t.train_number = tr.train_number
+JOIN PASSENGER_TICKET pt ON t.pnr_number = pt.pnr_number
+JOIN PASSENGER p ON pt.passenger_id = p.passenger_id
+WHERE t.pnr_number = 'TCK1001';
+
+-- 2. Train Schedule Lookup for a Given Train
+SELECT 
+    rs.station_code,
+    s.station_name,
+    rs.arrival_time,
+    rs.departure_time,
+    rs.distance_from_source,
+    rs.platform_number,
+    rs.halt_time
+FROM ROUTE_STATION rs
+JOIN STATION s ON rs.station_code = s.station_code
+WHERE rs.route_id = (
+    SELECT route_id FROM ROUTE WHERE train_number = '10101'
+)
+ORDER BY rs.stop_number;
+
+-- 3. Available Seats Query for a Specific Train, Date and Class
+SELECT 
+    available_seats,
+    rac_seats,
+    waitlist_count,
+    last_updated
+FROM TRAIN_STATUS
+WHERE train_number = '10101'
+AND journey_date = '2025-05-01'
+AND class_type = '1A';
+
+-- 4. List All Passengers Traveling on a Specific Train on a Given Date
+SELECT 
+    t.pnr_number,
+    p.name,
+    TIMESTAMPDIFF(YEAR, p.date_of_birth, CURDATE()) as age,
+    p.gender,
+    t.class_type,
+    pt.seat_number,
+    pt.coach_number,
+    pt.reservation_status
+FROM TICKET t
+JOIN PASSENGER_TICKET pt ON t.pnr_number = pt.pnr_number
+JOIN PASSENGER p ON pt.passenger_id = p.passenger_id
+WHERE t.train_number = '10101'
+AND t.journey_date = '2025-05-01';
+
+-- 5. Retrieve All Waitlisted Passengers for a Particular Train
+SELECT 
+    t.pnr_number,
+    p.name,
+    t.class_type,
+    COUNT(*) + 1 as waitlist_position
+FROM TICKET t
+JOIN PASSENGER_TICKET pt ON t.pnr_number = pt.pnr_number
+JOIN PASSENGER p ON pt.passenger_id = p.passenger_id
+WHERE t.train_number = '10102'
+AND t.journey_date = '2025-05-02'
+AND t.booking_status = 'WAITLISTED'
+GROUP BY t.pnr_number, p.name, t.class_type
+ORDER BY t.booking_timestamp;
+
+-- 6. Find Total Amount That Needs to Be Refunded for Cancelling a Train
+SELECT 
+    t.total_fare,
+    CASE 
+        WHEN TIMESTAMPDIFF(HOUR, NOW(), t.journey_date) > 48 THEN t.total_fare * 0.25
+        WHEN TIMESTAMPDIFF(HOUR, NOW(), t.journey_date) > 24 THEN t.total_fare * 0.50
+        ELSE t.total_fare * 0.75
+    END as cancellation_charge,
+    t.total_fare - (
+        CASE 
+            WHEN TIMESTAMPDIFF(HOUR, NOW(), t.journey_date) > 48 THEN t.total_fare * 0.25
+            WHEN TIMESTAMPDIFF(HOUR, NOW(), t.journey_date) > 24 THEN t.total_fare * 0.50
+            ELSE t.total_fare * 0.75
+        END
+    ) as refund_amount
+FROM TICKET t
+WHERE t.pnr_number = 'TCK1001';
+
+-- 7. Total Revenue Generated from Ticket Bookings Over a Specified Period
+SELECT 
+    payment_date,
+    daily_revenue,
+    number_of_bookings,
+    COALESCE(cancellation_charges, 0) as cancellation_charges,
+    COALESCE(refund_amount, 0) as refund_amount
+FROM (
+    SELECT 
+        DATE(payment_timestamp) as payment_date,
+        SUM(amount) as daily_revenue,
+        COUNT(*) as number_of_bookings
+    FROM PAYMENT
+    WHERE payment_timestamp BETWEEN '2024-01-01' AND '2025-05-31'
+    AND payment_status = 'Success'
+    GROUP BY DATE(payment_timestamp)
+) p
+LEFT JOIN (
+    SELECT 
+        DATE(cancellation_timestamp) as cancel_date,
+        SUM(t.total_fare - c.refund_amount) as cancellation_charges,
+        SUM(c.refund_amount) as refund_amount
+    FROM CANCELLATION c
+    JOIN TICKET t ON c.pnr_number = t.pnr_number
+    WHERE cancellation_timestamp BETWEEN '2024-01-01' AND '2025-05-31'
+    GROUP BY DATE(cancellation_timestamp)
+) c ON p.payment_date = c.cancel_date
+ORDER BY payment_date;
+
+-- 8. Cancellation Records with Refund Status
+SELECT 
+    c.pnr_number,
+    c.cancellation_timestamp,
+    c.cancellation_reason,
+    c.refund_amount,
+    c.refund_status,
+    c.refund_timestamp,
+    t.train_number,
+    t.journey_date
+FROM CANCELLATION c
+JOIN TICKET t ON c.pnr_number = t.pnr_number
+WHERE c.cancellation_timestamp BETWEEN '2024-01-01' AND '2025-05-31'
+ORDER BY c.cancellation_timestamp DESC;
+
+-- 9. Find the Busiest Route Based on Passenger Count
+SELECT 
+    r.source_station,
+    r.destination_station,
+    r.train_number,
+    COUNT(t.pnr_number) as passenger_count,
+    SUM(t.total_fare) as total_revenue
+FROM ROUTE r
+JOIN TICKET t ON r.train_number = t.train_number
+WHERE t.journey_date BETWEEN '2024-01-01' AND '2025-05-31'
+GROUP BY r.source_station, r.destination_station, r.train_number
+ORDER BY passenger_count DESC
+LIMIT 10;
+
+-- 10. Generate an Itemized Bill for a Ticket Including All Charges
+SELECT 
+    t.pnr_number,
+    t.booking_date,
+    t.journey_date,
+    t.train_number,
+    tr.train_name,
+    t.source_station,
+    t.destination_station,
+    t.class_type,
+    t.total_passengers,
+    tc.basic_fare * t.total_passengers as basic_fare,
+    p.gst_amount,
+    p.service_charge,
+    (
+        SELECT COALESCE(SUM(concession_amount), 0)
+        FROM PASSENGER_TICKET
+        WHERE pnr_number = t.pnr_number
+    ) as concession_amount,
+    t.total_fare,
+    p.payment_mode,
+    p.transaction_id,
+    p.payment_status,
+    p.payment_timestamp
+FROM TICKET t
+JOIN TRAIN tr ON t.train_number = tr.train_number
+JOIN TRAIN_CLASS tc ON t.train_number = tc.train_number AND t.class_type = tc.class_type
+JOIN PAYMENT p ON t.pnr_number = p.pnr_number
+WHERE t.pnr_number = 'TCK1001';
+
+-- 11. Demonstration of the book_ticket Procedure
+
+SHOW CREATE PROCEDURE book_ticket;
+
+-- This procedure handles the entire ticket booking process including passenger registration,
+-- seat allocation, payment processing, and status updates.
+-- Example usage with correct number of parameters (15):
+CALL book_ticket(
+    'John Doe',                  -- p_name
+    'john@example.com',          -- p_email
+    '9876543210',                -- p_phone
+    '123 Main St, Delhi',        -- p_address
+    '1980-01-01',                -- p_date_of_birth
+    'Male',                      -- p_gender
+    'Aadhar',                    -- p_id_proof_type
+    'AAD1234567',                -- p_id_proof_number
+    TRUE,                        -- p_is_registered
+    '10101',                     -- p_train_number
+    '2025-05-01',                -- p_journey_date
+    '1A',                        -- p_class_type
+    'Online',                    -- p_payment_mode
+    2,                           -- p_num_passengers
+    @result                      -- p_result (output parameter)
+);
+
+-- To view the result:
+SELECT @result;
+
+-- 12. Demonstration of the cancel_ticket Procedure
+
+SHOW CREATE PROCEDURE cancel_ticket;
+
+-- This procedure handles ticket cancellation, calculates refund amount,
+-- updates seat availability, and records cancellation details.
+-- Example usage:
+CALL cancel_ticket(
+    'TCK1001',                   -- p_pnr
+    'Change in travel plans',     -- p_cancellation_reason
+    @cancel_result               -- p_result (output parameter)
+);
+
+-- To view the result:
+SELECT @cancel_result;
+
+-- 13. Demonstration of the get_booking_details Function
+
+SHOW CREATE FUNCTION get_booking_details;
+
+-- This function returns detailed booking information in JSON format
+-- Example usage:
+SELECT get_booking_details('TCK1001');
+
+-- 14. Demonstration of the get_train_details Function
+
+SHOW CREATE FUNCTION get_train_details;
+
+-- This function returns comprehensive train information including schedule and class details
+-- Example usage:
+SELECT get_train_details('10101');
+
+-- 15. Example of a Trigger for Updating Train Status
+-- This trigger automatically updates the train status when a ticket is booked or cancelled
+-- Note: To create this trigger in MySQL command line, you need to use the following approach:
+
+-- First, set the delimiter to // to allow for multi-line statements
+DELIMITER //
+
+-- Then create the trigger
+CREATE TRIGGER after_ticket_insert
+AFTER INSERT ON TICKET
+FOR EACH ROW
+BEGIN
+    -- Update available seats in TRAIN_STATUS
+    UPDATE TRAIN_STATUS
+    SET available_seats = available_seats - NEW.total_passengers,
+        last_updated = NOW()
+    WHERE train_number = NEW.train_number
+    AND journey_date = NEW.journey_date
+    AND class_type = NEW.class_type;
+END //
+
+-- Reset the delimiter back to semicolon
+DELIMITER ;
+
+-- 16. Example of a Trigger for Handling Waitlist
+-- This trigger automatically assigns seats to waitlisted passengers when seats become available
+-- Note: To create this trigger in MySQL command line, you need to use the following approach:
+
+-- First, set the delimiter to // to allow for multi-line statements
+DELIMITER //
+
+-- Then create the trigger
+CREATE TRIGGER after_ticket_cancel
+AFTER UPDATE ON TICKET
+FOR EACH ROW
+BEGIN
+    IF NEW.booking_status = 'CANCELLED' AND OLD.booking_status != 'CANCELLED' THEN
+        -- Find the first waitlisted passenger for this train and class
+        DECLARE v_pnr VARCHAR(15);
+        DECLARE v_passenger_id INT;
+        
+        SELECT pt.pnr_number, pt.passenger_id
+        INTO v_pnr, v_passenger_id
+        FROM PASSENGER_TICKET pt
+        JOIN TICKET t ON pt.pnr_number = t.pnr_number
+        WHERE t.train_number = NEW.train_number
+        AND t.journey_date = NEW.journey_date
+        AND t.class_type = NEW.class_type
+        AND t.booking_status = 'WAITLISTED'
+        ORDER BY t.booking_timestamp
+        LIMIT 1;
+        
+        IF v_pnr IS NOT NULL THEN
+            -- Update ticket status to CONFIRMED
+            UPDATE TICKET
+            SET booking_status = 'CONFIRMED'
+            WHERE pnr_number = v_pnr;
+            
+            -- Update passenger ticket status
+            UPDATE PASSENGER_TICKET
+            SET reservation_status = 'CONFIRMED',
+                seat_number = CONCAT(NEW.class_type, '-', FLOOR(RAND() * 100)),
+                coach_number = NEW.class_type
+            WHERE pnr_number = v_pnr
+            AND passenger_id = v_passenger_id;
+        END IF;
+    END IF;
+END //
+
+DELIMITER ;
+
+-- 17. Find Trains Between Two Stations on a Specific Date
+-- This query helps users find all trains running between two stations on a given date
+SELECT 
+    t.train_number,
+    t.train_name,
+    t.train_type,
+    r.source_station,
+    r.destination_station,
+    rs1.departure_time,
+    rs2.arrival_time,
+    r.total_distance,
+    tc.basic_fare
+FROM TRAIN t
+JOIN ROUTE r ON t.train_number = r.train_number
+JOIN ROUTE_STATION rs1 ON r.route_id = rs1.route_id AND r.source_station = rs1.station_code
+JOIN ROUTE_STATION rs2 ON r.route_id = rs2.route_id AND r.destination_station = rs2.station_code
+JOIN TRAIN_CLASS tc ON t.train_number = tc.train_number
+WHERE r.source_station = 'NDLS'
+AND r.destination_station = 'HWH'
+AND tc.class_type = '2A'
+AND (
+    (DAYOFWEEK('2025-05-01') = 1 AND t.runs_on_sunday = TRUE) OR
+    (DAYOFWEEK('2025-05-01') = 2 AND t.runs_on_monday = TRUE) OR
+    (DAYOFWEEK('2025-05-01') = 3 AND t.runs_on_tuesday = TRUE) OR
+    (DAYOFWEEK('2025-05-01') = 4 AND t.runs_on_wednesday = TRUE) OR
+    (DAYOFWEEK('2025-05-01') = 5 AND t.runs_on_thursday = TRUE) OR
+    (DAYOFWEEK('2025-05-01') = 6 AND t.runs_on_friday = TRUE) OR
+    (DAYOFWEEK('2025-05-01') = 7 AND t.runs_on_saturday = TRUE)
+)
+ORDER BY rs1.departure_time;
+
+-- 18. Find Most Popular Trains by Revenue
+-- This query identifies the most profitable trains based on revenue generated
+SELECT 
+    t.train_number,
+    t.train_name,
+    t.train_type,
+    COUNT(DISTINCT tk.pnr_number) as total_bookings,
+    SUM(tk.total_fare) as total_revenue,
+    AVG(tk.total_fare) as average_fare
+FROM TRAIN t
+JOIN TICKET tk ON t.train_number = tk.train_number
+WHERE tk.booking_status = 'CONFIRMED'
+AND tk.journey_date BETWEEN '2024-01-01' AND '2025-05-31'
+GROUP BY t.train_number, t.train_name, t.train_type
+ORDER BY total_revenue DESC
+LIMIT 10;
+
+-- 19. Find Passenger Demographics by Train
+-- This query provides insights into passenger demographics for each train
+SELECT 
+    t.train_number,
+    t.train_name,
+    COUNT(DISTINCT p.passenger_id) as total_passengers,
+    AVG(TIMESTAMPDIFF(YEAR, p.date_of_birth, CURDATE())) as average_age,
+    SUM(CASE WHEN p.gender = 'Male' THEN 1 ELSE 0 END) as male_count,
+    SUM(CASE WHEN p.gender = 'Female' THEN 1 ELSE 0 END) as female_count,
+    SUM(CASE WHEN p.is_registered = TRUE THEN 1 ELSE 0 END) as registered_count
+FROM TRAIN t
+JOIN TICKET tk ON t.train_number = tk.train_number
+JOIN PASSENGER_TICKET pt ON tk.pnr_number = pt.pnr_number
+JOIN PASSENGER p ON pt.passenger_id = p.passenger_id
+WHERE tk.journey_date BETWEEN '2024-01-01' AND '2025-05-31'
+GROUP BY t.train_number, t.train_name;
+
+-- 20. Find Peak Booking Hours
+-- This query helps identify the busiest hours for ticket bookings
+SELECT 
+    HOUR(booking_timestamp) as booking_hour,
+    COUNT(*) as booking_count,
+    SUM(total_fare) as total_revenue
+FROM TICKET
+WHERE booking_timestamp BETWEEN '2024-01-01' AND '2025-05-31'
+GROUP BY HOUR(booking_timestamp)
+ORDER BY booking_count DESC; 

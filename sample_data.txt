@@ -1,0 +1,107 @@
+-- First delete from child tables
+DELETE FROM PASSENGER_TICKET;
+DELETE FROM PAYMENT;
+DELETE FROM CANCELLATION;
+DELETE FROM TRAIN_STATUS;
+DELETE FROM ROUTE_STATION;
+DELETE FROM TRAIN_CLASS;
+DELETE FROM ROUTE;
+
+-- Then delete from parent tables
+DELETE FROM TICKET;
+DELETE FROM PASSENGER;
+DELETE FROM CONCESSION;
+DELETE FROM STATION;
+DELETE FROM TRAIN;
+DELETE FROM CLASS;
+
+-- First truncate child tables
+TRUNCATE TABLE PASSENGER_TICKET;
+TRUNCATE TABLE PAYMENT;
+TRUNCATE TABLE CANCELLATION;
+TRUNCATE TABLE TRAIN_STATUS;
+TRUNCATE TABLE ROUTE_STATION;
+TRUNCATE TABLE TRAIN_CLASS;
+TRUNCATE TABLE ROUTE;
+
+-- Then truncate parent tables
+TRUNCATE TABLE TICKET;
+TRUNCATE TABLE PASSENGER;
+TRUNCATE TABLE CONCESSION;
+TRUNCATE TABLE STATION;
+TRUNCATE TABLE TRAIN;
+TRUNCATE TABLE CLASS;
+
+-- CLASS
+INSERT INTO CLASS VALUES
+('1A', 'First Class AC', TRUE, '1 + 1 Berths'),
+('2A', 'Second Class AC', TRUE, '2 + 2 Berths'),
+('3A', 'Third Class AC', TRUE, '2 + 4 Berths'),
+('SL', 'Sleeper Class', FALSE, '3 tier berths'),
+('CC', 'Chair Car', TRUE, 'Rows of Seats');
+
+-- STATION
+INSERT INTO STATION VALUES
+('NDLS', 'New Delhi', 'New Delhi', 'Delhi', 16, 'Northern', 28.6419, 77.2192),
+('HWH', 'Howrah Junction', 'Kolkata', 'West Bengal', 23, 'Eastern', 22.5839, 88.3428),
+('MAS', 'Chennai Central', 'Chennai', 'Tamil Nadu', 12, 'Southern', 13.0827, 80.2755),
+('SBC', 'Bengaluru City Junction', 'Bengaluru', 'Karnataka', 10, 'South Western', 12.9784, 77.5730),
+('CSTM', 'Chhatrapati Shivaji Terminus', 'Mumbai', 'Maharashtra', 18, 'Central', 18.9402, 72.8355);
+
+-- TRAIN
+INSERT INTO TRAIN VALUES
+('10101', 'Test Express', 'Express', 20, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE),
+('10102', 'Sample Superfast', 'Superfast', 22, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE);
+
+-- TRAIN_CLASS
+INSERT INTO TRAIN_CLASS VALUES
+(1, '10101', '1A', 20, 3500),
+(2, '10101', '2A', 40, 2000),
+(3, '10102', 'SL', 100, 750);
+
+-- ROUTE
+INSERT INTO ROUTE VALUES
+(1, '10101', 'NDLS', 'MAS', 2200, 5),
+(2, '10102', 'SBC', 'HWH', 1800, 4);
+
+-- ROUTE_STATION
+INSERT INTO ROUTE_STATION VALUES
+(1, 1, 'NDLS', 1, NULL, '06:00:00', 0, 1, 10),
+(2, 1, 'MAS', 5, '22:00:00', NULL, 2200, 5, NULL),
+(3, 2, 'SBC', 1, NULL, '08:00:00', 0, 2, 5),
+(4, 2, 'HWH', 4, '20:00:00', NULL, 1800, 8, NULL);
+
+-- PASSENGER
+INSERT INTO PASSENGER VALUES
+(1, 'John Doe', 'john@example.com', '9999999999', '123 Main St, Delhi', '1980-01-01', 'Male', 'Aadhar', 'AAD1234567', TRUE),
+(2, 'Jane Smith', 'jane@example.com', '8888888888', '456 Park Ave, Mumbai', '1990-02-02', 'Female', 'PAN', 'PAN8901234', TRUE);
+
+-- CONCESSION
+INSERT INTO CONCESSION VALUES
+('Senior Citizen', 50.0, 'Above 60 years old', 'Age above 60', TRUE),
+('Student', 25.0, 'For students with valid ID', 'Valid Student ID', TRUE);
+
+-- TRAIN_STATUS
+INSERT INTO TRAIN_STATUS VALUES
+(1, '10101', '2025-05-01', '1A', 10, 2, 0, '2025-04-16 10:00:00', NULL),
+(2, '10102', '2025-05-02', 'SL', 80, 10, 5, '2025-04-16 10:05:00', NULL);
+
+-- TICKET
+INSERT INTO TICKET VALUES
+('TCK1001', '2025-04-15', '2025-05-01', 'NDLS', 'MAS', '10101', '1A', 2, 7000, 'CONFIRMED', '2025-04-15 09:00:00', 'Online'),
+('TCK1002', '2025-04-15', '2025-05-02', 'SBC', 'HWH', '10102', 'SL', 1, 750, 'RAC', '2025-04-15 09:15:00', 'Mobile App');
+
+-- PAYMENT
+INSERT INTO PAYMENT VALUES
+(1, 'TCK1001', 7000, 'Credit Card', '2025-04-15 09:05:00', 'TXN00001', 'Success', 350, 50),
+(2, 'TCK1002', 750, 'UPI', '2025-04-15 09:20:00', 'TXN00002', 'Success', 38, 10);
+
+-- PASSENGER_TICKET
+INSERT INTO PASSENGER_TICKET VALUES
+(1, 'TCK1001', 1, 'A1-01', 'A1', 'CONFIRMED', TRUE, 0, NULL),
+(2, 'TCK1001', 2, 'A1-02', 'A1', 'CONFIRMED', FALSE, 0, NULL),
+(3, 'TCK1002', 1, NULL, NULL, 'RAC/5', TRUE, 0, NULL);
+
+-- CANCELLATION
+INSERT INTO CANCELLATION VALUES
+(1, 'TCK1002', '2025-04-16 12:00:00', 'Change in plan', 700, 'Processed', '2025-04-16 12:10:00', 'Passenger');
